@@ -1,0 +1,41 @@
+#!/usr/bin/env php
+<?php
+
+// Make warnings errors, source: https://stackoverflow.com/a/2071048/514723
+set_error_handler( function ($errno, $errstr, $errfile, $errline) {
+    throw new ErrorException($errstr, $errno, 0, $errfile, $errline);
+});
+
+// Parameters, such as:
+// argv[2]: insertion, e.g. 'INSERT INTO turaus VALUES ($1, $2, $3)'
+$source = $argv[1];
+$insertion = $argv[2];
+
+// Connect and prepare statements
+$db = pg_connect("dbname=hacklabjkl_sensor");
+pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE source=$1');
+pg_prepare($db, 'cursor_set', 'INSERT INTO cursor VALUES ($1, $2) ON CONFLICT (source) DO UPDATE SET cursor=$2');
+
+pg_prepare($db, 'data', $insertion);
+// Return the pointer to the remote application
+$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', array($source)), $field=0);
+print(($cursor_start ?: "") . "\n");
+
+// Start receiving lines
+while (true) {
+    // Get CSV data or quit if EOF reached
+    $line = fgetcsv(STDIN);
+    if ($line === FALSE) break;
+
+    // Cursor is the first element
+    $cursor = array_shift($line);
+    
+    // Insert CSV to a table
+    pg_query($db, 'BEGIN;');
+    pg_execute($db, 'data', $line);
+    pg_execute($db, 'cursor_set', [$source, $cursor]);
+    pg_query($db, 'COMMIT;');
+    var_dump($line);
+}
+
+print("All data received\n");
