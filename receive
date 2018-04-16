@@ -13,13 +13,17 @@ $insertion = $argv[2];
 
 // Connect and prepare statements
 $db = pg_connect("dbname=hacklabjkl_sensor");
+pg_prepare($db, 'cursor_create', 'INSERT INTO cursor VALUES ($1) ON CONFLICT DO NOTHING');
 pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE source=$1');
-pg_prepare($db, 'cursor_set', 'INSERT INTO cursor VALUES ($1, $2) ON CONFLICT (source) DO UPDATE SET cursor=$2');
-
+pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$2 where source=$1');
 pg_prepare($db, 'data', $insertion);
+
+// Create cursor if not exists
+pg_execute($db, 'cursor_create', [$source]);
+
 // Return the pointer to the remote application
-$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', array($source)), $field=0);
-print(($cursor_start ?: "") . "\n");
+$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$source]), 0, 0);
+print("$cursor_start\n");
 
 // Start receiving lines
 while (true) {
@@ -35,7 +39,6 @@ while (true) {
     pg_execute($db, 'data', $line);
     pg_execute($db, 'cursor_set', [$source, $cursor]);
     pg_query($db, 'COMMIT;');
-    var_dump($line);
 }
 
 print("All data received\n");
