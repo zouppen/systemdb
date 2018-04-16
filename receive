@@ -6,8 +6,12 @@ set_error_handler( function ($errno, $errstr, $errfile, $errline) {
     throw new ErrorException($errstr, $errno, 0, $errfile, $errline);
 });
 
-// Parameters, such as:
-// argv[2]: insertion, e.g. 'INSERT INTO turaus VALUES ($1, $2, $3)'
+if ($argc !== 3) {
+    fwrite(STDERR, "Usage:   ${argv[0]} DATA_SOURCE INSERT_STATEMENT\n");
+    fwrite(STDERR, "Example: ${argv[0]} turaamo 'INSERT INTO turaus VALUES ($1, $2, $3)'\n");
+    exit(1);
+}
+
 $source = $argv[1];
 $insertion = $argv[2];
 
@@ -33,6 +37,11 @@ while (true) {
 
     // Cursor is the first element
     $cursor = array_shift($line);
+
+    if ($cursor === $cursor_start) {
+        fwrite(STDERR, "Ignoring: Duplicated packet\n");
+        continue;
+    }
     
     // Insert CSV to a table
     pg_query($db, 'BEGIN;');
@@ -41,4 +50,4 @@ while (true) {
     pg_query($db, 'COMMIT;');
 }
 
-print("All data received\n");
+fprintf(STDERR, "End of stream\n");
