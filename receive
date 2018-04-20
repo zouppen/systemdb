@@ -6,27 +6,27 @@ set_error_handler( function ($errno, $errstr, $errfile, $errline) {
     throw new ErrorException($errstr, $errno, 0, $errfile, $errline);
 });
 
-if ($argc !== 3) {
-    fwrite(STDERR, "Usage:   ${argv[0]} DATA_SOURCE INSERT_STATEMENT\n");
-    fwrite(STDERR, "Example: ${argv[0]} turaamo 'INSERT INTO turaus VALUES ($1, $2, $3)'\n");
+if ($argc !== 2) {
+    fwrite(STDERR, "Usage:   ${argv[0]} INI_FILE\n");
     exit(1);
 }
 
-$source = $argv[1];
-$insertion = $argv[2];
+$ini = parse_ini_file($argv[1], true);
 
 // Connect and prepare statements
 $db = pg_connect("dbname=hacklabjkl_sensor");
 pg_prepare($db, 'cursor_create', 'INSERT INTO cursor VALUES ($1) ON CONFLICT DO NOTHING');
 pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE source=$1');
 pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$2 where source=$1');
-pg_prepare($db, 'data', $insertion);
+foreach ($ini['sql'] as $tag => $sql) {
+    pg_prepare($db, "data_$tag", $sql);
+}
 
 // Create cursor if not exists
-pg_execute($db, 'cursor_create', [$source]);
+pg_execute($db, 'cursor_create', [$ini['source']]);
 
 // Return the pointer to the remote application
-$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$source]), 0, 0);
+$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$ini['source']]), 0, 0);
 print("$cursor_start\n");
 
 // Start receiving lines
@@ -35,8 +35,9 @@ while (true) {
     $line = fgetcsv(STDIN);
     if ($line === FALSE) break;
 
-    // Cursor is the first element
+    // Cursor is the first element, data tag is second
     $cursor = array_shift($line);
+    $tag = array_shift($line);
 
     if ($cursor === $cursor_start) {
         fwrite(STDERR, "Ignoring: Duplicated packet\n");
@@ -45,8 +46,8 @@ while (true) {
     
     // Insert CSV to a table
     pg_query($db, 'BEGIN;');
-    pg_execute($db, 'data', $line);
-    pg_execute($db, 'cursor_set', [$source, $cursor]);
+    pg_execute($db, "data_$tag", $line);
+    pg_execute($db, 'cursor_set', [$ini['source'], $cursor]);
     pg_query($db, 'COMMIT;');
 }
 
