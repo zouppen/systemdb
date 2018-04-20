@@ -14,19 +14,28 @@ if ($argc !== 2) {
 $ini = parse_ini_file($argv[1], true);
 
 // Connect and prepare statements
-$db = pg_connect("dbname=hacklabjkl_sensor");
+$db = pg_connect($ini['db']);
 pg_prepare($db, 'cursor_create', 'INSERT INTO cursor VALUES ($1) ON CONFLICT DO NOTHING');
 pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE source=$1');
 pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$2 where source=$1');
-foreach ($ini['sql'] as $tag => $sql) {
+
+// Check if the source is allowed in the config file
+$source = trim(fgets(STDIN));
+if (!array_key_exists($source, $ini)) {
+    fwrite(STDERR, "Unknown cursor name given: $source\n");
+    exit(2);
+}
+
+// Prepare queries for given source
+foreach ($ini[$source] as $tag => $sql) {
     pg_prepare($db, "data_$tag", $sql);
 }
 
 // Create cursor if not exists
-pg_execute($db, 'cursor_create', [$ini['source']]);
+pg_execute($db, 'cursor_create', [$source]);
 
 // Return the pointer to the remote application
-$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$ini['source']]), 0, 0);
+$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$source]), 0, 0);
 print("$cursor_start\n");
 
 // Start receiving lines
@@ -47,7 +56,7 @@ while (true) {
     // Insert CSV to a table
     pg_query($db, 'BEGIN;');
     pg_execute($db, "data_$tag", $line);
-    pg_execute($db, 'cursor_set', [$ini['source'], $cursor]);
+    pg_execute($db, 'cursor_set', [$source, $cursor]);
     pg_query($db, 'COMMIT;');
 }
 
