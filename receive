@@ -39,25 +39,25 @@ $cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$source]), 0, 0
 print("$cursor_start\n");
 
 // Start receiving lines
+pg_query($db, 'BEGIN;');
+
 while (true) {
     // Get CSV data or quit if EOF reached
     $line = fgetcsv(STDIN);
     if ($line === FALSE) break;
 
-    // Cursor is the first element, data tag is second
-    $cursor = array_shift($line);
     $tag = array_shift($line);
 
-    if ($cursor === $cursor_start) {
-        fwrite(STDERR, "Ignoring: Duplicated packet\n");
-        continue;
+    if ($tag === '__CURSOR') {
+        // If the data tag is __CURSOR, then we have fully received the
+        // rows related to a single cursor and it's time to commit.
+        $cursor = array_shift($line);
+        pg_execute($db, 'cursor_set', [$source, $cursor]);
+        pg_query($db, 'COMMIT;BEGIN;');
+    } else {
+        // Insert CSV to a table but do not commit yet
+        pg_execute($db, "data_$tag", $line);
     }
-    
-    // Insert CSV to a table
-    pg_query($db, 'BEGIN;');
-    pg_execute($db, "data_$tag", $line);
-    pg_execute($db, 'cursor_set', [$source, $cursor]);
-    pg_query($db, 'COMMIT;');
 }
 
 fprintf(STDERR, "End of stream\n");
