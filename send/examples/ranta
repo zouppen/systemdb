@@ -3,13 +3,11 @@
 
 require(__DIR__."/../common.php");
 
-// First, open SSH pipe and ask for a cursor
-$remote = popen('exec ssh -CT joell@10.101.5.19', 'rw');
-$cursor = fgets($remote);
-if ($cursor === false) q("No cursor received from SSH");
+$cursor = fgets(STDIN);
+if ($cursor === false) q("No remote cursor received");
 $cursor=trim($cursor);
 
-$cur = journalctl($remote, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data) {
+$cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data) {
     $ts = intval($data['__REALTIME_TIMESTAMP']) / 1000000;
     if ($data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
         $json = json_decode($data['MESSAGE'], true);
