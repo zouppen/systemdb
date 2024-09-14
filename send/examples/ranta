@@ -16,7 +16,7 @@ $cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function(
             fprintf(STDERR, 'Skipping Victron non-JSON data');
             return;
         }
-        return ['victron_ble', $ts, $data['MESSAGE']];
+        return ['victron-ble', $ts, $data['MESSAGE']];
     }
 });
 

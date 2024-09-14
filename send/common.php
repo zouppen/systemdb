@@ -69,7 +69,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
     };
 
     $new_data = false;
-    pipe_period($pipe, 10, $datafunc, $cursor_func);
+    pipe_period($pipe, 5, $datafunc, $cursor_func);
 
     // After EOF, report last cursor and return it to the caller.
     $cursor_func();
