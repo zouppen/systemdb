@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+require(__DIR__."/../common.php");
+
+// First, open SSH pipe and ask for a cursor
+$remote = popen('exec ssh -CT joell@10.101.5.19', 'rw');
+$cursor = fgets($remote);
+if ($cursor === false) q("No cursor received from SSH");
+$cursor=trim($cursor);
+
+$cur = journalctl($remote, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data) {
+    $ts = intval($data['__REALTIME_TIMESTAMP']) / 1000000;
+    if ($data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
+        $json = json_decode($data['MESSAGE'], true);
+        if ($json === null) {
+            fprintf(STDERR, 'Skipping Victron non-JSON data');
+            return;
+        }
+        return ['victron_ble', $ts, $data['MESSAGE']];
+    }
+});
+
+function q($msg, $exit_code=1) {
+    fprintf(STDERR, $msg . "\n");
+    exit($exit_code);
+}
