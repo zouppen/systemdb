@@ -22,7 +22,7 @@ function pipe_period($stream, $period, $line_func, $period_func)
     $next_tick = hrtime(true) + $period_ns;
 
     while(true) {
-        $left = intdiv(max($next_tick - hrtime(true), 0), 1000);
+        $left = intval(max($next_tick - hrtime(true), 0) / 1000);
         $left_sec = intdiv($left, 1000000);
         $left_msec = $left - $left_sec * 1000000;
 
