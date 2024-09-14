@@ -3,6 +3,7 @@
 
 require(__DIR__."/../common.php");
 
+print("journal\n");
 $cursor = fgets(STDIN);
 if ($cursor === false) q("No remote cursor received");
 $cursor=trim($cursor);
