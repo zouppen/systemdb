@@ -8,8 +8,7 @@ $cursor = fgets(STDIN);
 if ($cursor === false) q("No remote cursor received");
 $cursor=trim($cursor);
 
-$cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data) {
-    $ts = bcdiv($data['__REALTIME_TIMESTAMP'], 1000000, 3);
+$cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data, $ts) {
     if ($data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
         $json = json_decode($data['MESSAGE'], true);
         if ($json === null) {

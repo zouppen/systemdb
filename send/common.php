@@ -52,7 +52,8 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
         } else {
             $cursor = $json['__CURSOR'];
             $new_data = true;
-            $output = $f($json);
+            $ts = bcdiv($json['__REALTIME_TIMESTAMP'], 1000000, 3);
+            $output = $f($json, $ts);
             if (is_array($output)) {
                 fputcsv($stream, $output);
             } else {
