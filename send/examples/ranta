@@ -4,7 +4,8 @@
 require(__DIR__."/../common.php");
 
 journalctl_catch('exec ssh -CT grafana', 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
-    if (@$data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
+    switch (@$data['_SYSTEMD_UNIT']) {
+    case 'victron-ble.service':
         $json = json_decode($data['MESSAGE'], true);
         if ($json === null) {
             throw new SkipMessage('Victron non-JSON data');
