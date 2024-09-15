@@ -35,16 +35,16 @@ function getline_timeout($stream, $timeout)
     }
 }
 
-function hrtimeSec() {
+function hrtime_sec() {
     return bcdiv(hrtime(true), "1000000000", 9);
 }
 
 function pipe_period($stream, $period, $line_func, $period_func)
 {
-    $next_tick = bcadd(hrtimeSec(), $period, 9);
+    $next_tick = bcadd(hrtime_sec(), $period, 9);
 
     while(true) {
-        $left = bcsub($next_tick, hrtimeSec(), 9);
+        $left = bcsub($next_tick, hrtime_sec(), 9);
         $line = getline_timeout($stream, $left);
         if ($line === EOF) {
             return;
@@ -124,7 +124,7 @@ function journalctl($command, $hello, $cmdline_extra, $f)
     if ($cursor === false) {
         throw new ProcessingException('No remote cursor received');
     }
-    $cursor=trim($cursor);
+    $cursor = trim($cursor);
     fprintf(STDERR, "Connected\n");
 
     // Run journal reader twice, first without follow and then with
