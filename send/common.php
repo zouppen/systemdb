@@ -18,17 +18,28 @@ set_error_handler(function($severity, $message, $file, $line) {
     }
 });
 
-function getline_timeout($stream, $timeout)
+function getline_timeout($stream, $timeout, $stream_remote)
 {
     // Split the time 32-bit safe way
     if (bccomp("0", $timeout, 9) === 1) $timeout = "0";
     $seconds = intval($timeout);
     $milliseconds = intval(bcmul(bcsub($timeout, $seconds, 9), "1000000", 9));
 
-    $inputs = [$stream];
+    $inputs = [$stream, $stream_remote];
     $write = [];
     $except = [];
     if (stream_select($inputs, $write, $except, $seconds, $milliseconds)) {
+        foreach ($inputs as $i) {
+            if ($i === $stream_remote) {
+                $s = fread($stream_remote, 1024);
+                if (feof($stream_remote)) {
+                    throw new ProcessingException("Remote stream closed", 2);
+                } else {
+                    throw new OtherMessage("Unexpected input received from remote", $s);
+                }
+            }
+        }
+        // This is just a new line
         return fgets($stream);
     } else {
         return TIMEOUT;
@@ -39,29 +50,31 @@ function hrtime_sec() {
     return bcdiv(hrtime(true), "1000000000", 9);
 }
 
-function pipe_period($stream, $period, $line_func, $period_func)
+function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
 {
     $next_tick = bcadd(hrtime_sec(), $period, 9);
 
     while(true) {
         $left = bcsub($next_tick, hrtime_sec(), 9);
-        $line = getline_timeout($stream, $left);
-        if ($line === EOF) {
-            return;
-        } elseif ($line === TIMEOUT) {
-            $next_tick = bcadd($next_tick, $period, 9);
-            $period_func();
-        } else {
-            try {
+        try {
+            $line = getline_timeout($stream, $left, $stream_remote);
+            if ($line === EOF) {
+                return;
+            } elseif ($line === TIMEOUT) {
+                $next_tick = bcadd($next_tick, $period, 9);
+                $period_func();
+            } else {
                 $line_func($line);
-            } catch (SkipMessage $e) {
-                $e->warn();
             }
+        } catch (SkipMessage $e) {
+            $e->warn();
+        } catch (otherMessage $e) {
+            $e->warn();
         }
     }
 }
 
-function journalctl_single($stream, $cmdline_extra, $cursor, $f)
+function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
 {
     // Convert cursor to cmd
     $after = $cursor === '' ? '' : escapeshellarg('--after-cursor='.$cursor);
@@ -98,7 +111,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
     };
 
     $new_data = false;
-    pipe_period($pipe, 5, $datafunc, $cursor_func);
+    pipe_period($pipe, 5, $datafunc, $cursor_func, $stream_remote);
 
     // After EOF, report last cursor and return it to the caller.
     $cursor_func();
@@ -141,8 +154,8 @@ function journalctl($command, $hello, $cmdline_extra, $f)
     // Run journal reader twice, first without follow and then with
     // follow on. Helps to mitigate certain journald issues when
     // following to months-old log files.
-    $cursor = journalctl_single($pipes[0], $cmdline_extra, $cursor, $f);
-    journalctl_single($pipes[0], '-f '.$cmdline_extra, $cursor, $f);
+    $cursor = journalctl_single($pipes[0], $cmdline_extra, $cursor, $f, $pipes[1]);
+    journalctl_single($pipes[0], '-f '.$cmdline_extra, $cursor, $f, $pipes[1]);
 }
 
 class SkipMessage extends Exception
@@ -161,6 +174,22 @@ class SkipMessage extends Exception
     public function warn()
     {
         fprintf(STDERR, "Skipping a log message, reason: %s. Cursor: %s\n", $this->getMessage(), $this->cursor);
+    }
+}
+
+class OtherMessage extends Exception
+{
+    private $payload;
+
+    public function __construct($message, $payload)
+    {
+        parent::__construct($message, 0);
+        $this->payload = $payload;
+    }
+
+    public function warn()
+    {
+        fprintf(STDERR, "%s: %s\n", $this->getMessage(), json_encode($this->payload));
     }
 }
 
