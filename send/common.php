@@ -105,6 +105,17 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
     return $cursor;
 }
 
+// Version of journalctl which dies with a more compact message if
+// processing error occurs.
+function journalctl_catch()
+{
+    try {
+        return call_user_func_array("journalctl", func_get_args());
+    } catch (ProcessingException $e) {
+        $e->die();
+    }
+}
+
 function journalctl($command, $hello, $cmdline_extra, $f)
 {
     $res = proc_open($command, [
