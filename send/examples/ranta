@@ -3,7 +3,7 @@
 
 require(__DIR__."/../common.php");
 
-journalctl('exec ssh -CT grafana', 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
+journalctl_catch('exec ssh -CT grafana', 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
     if (@$data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
         $json = json_decode($data['MESSAGE'], true);
         if ($json === null) {
