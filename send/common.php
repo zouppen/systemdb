@@ -100,12 +100,33 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
     return $cursor;
 }
 
-// Run journal reader twice, first without follow and then with follow
-// on. Helps to mitigate certain journald issues when following to
-// months-old log files.
-function journalctl($stream, $cmdline_extra, $cursor, $f) {
-    $second_cursor = journalctl_single($stream, $cmdline_extra, $cursor, $f);
-    journalctl_single($stream, '-f '.$cmdline_extra, $second_cursor, $f);
+function journalctl($command, $hello, $cmdline_extra, $f)
+{
+    $res = proc_open($command, [
+        ['pipe', 'r'], // stdin
+        ['pipe', 'w'], // stdout
+        STDERR, // dump stdout to console
+    ], $pipes);
+    if ($res == false) {
+        throw new ProcessingException('Unable to start data sink command');
+    }
+
+    if (fwrite($pipes[0], "$hello\n") === false) {
+        throw new ProcessingException('Error in hello phase');
+    }
+
+    $cursor = fgets($pipes[1]);
+    if ($cursor === false) {
+        throw new ProcessingException('No remote cursor received');
+    }
+    $cursor=trim($cursor);
+    fprintf(STDERR, "Connected\n");
+
+    // Run journal reader twice, first without follow and then with
+    // follow on. Helps to mitigate certain journald issues when
+    // following to months-old log files.
+    $cursor = journalctl_single($pipes[0], $cmdline_extra, $cursor, $f);
+    journalctl_single($pipes[0], '-f '.$cmdline_extra, $cursor, $f);
 }
 
 class SkipMessage extends Exception

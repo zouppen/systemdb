@@ -3,12 +3,7 @@
 
 require(__DIR__."/../common.php");
 
-print("journal\n");
-$cursor = fgets(STDIN);
-if ($cursor === false) q("No remote cursor received");
-$cursor=trim($cursor);
-
-$cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data, $ts) {
+journalctl('exec ssh -CT grafana', 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
     if (@$data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
         $json = json_decode($data['MESSAGE'], true);
         if ($json === null) {
@@ -18,7 +13,3 @@ $cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function(
     }
 });
 
-function q($msg, $exit_code=1) {
-    fprintf(STDERR, $msg . "\n");
-    exit($exit_code);
-}
