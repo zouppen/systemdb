@@ -21,14 +21,21 @@ set_error_handler(function($severity, $message, $file, $line) {
 function getline_timeout($stream, $timeout, $stream_remote)
 {
     // Split the time 32-bit safe way
-    if (bccomp("0", $timeout, 9) === 1) $timeout = "0";
-    $seconds = intval($timeout);
-    $milliseconds = intval(bcmul(bcsub($timeout, $seconds, 9), "1000000", 9));
+    if ($timeout === null) {
+        // Blocking read with no timeout
+    } else if (bccomp("0", $timeout, 9) === 1) {
+        // Non-blocking read
+        $sec = 0;
+    } else {
+        // Blocking read with timeout
+        $sec = intval($timeout);
+        $ms = intval(bcmul(bcsub($timeout, $sec, 9), "1000000", 9));
+    }
 
     $inputs = [$stream, $stream_remote];
     $write = [];
     $except = [];
-    if (stream_select($inputs, $write, $except, $seconds, $milliseconds)) {
+    if (stream_select($inputs, $write, $except, $sec, $ms)) {
         foreach ($inputs as $i) {
             if ($i === $stream_remote) {
                 $s = fread($stream_remote, 1024);
@@ -52,18 +59,19 @@ function hrtime_sec() {
 
 function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
 {
-    $next_tick = bcadd(hrtime_sec(), $period, 9);
-
     while(true) {
-        $left = bcsub($next_tick, hrtime_sec(), 9);
+        $left = $next_tick === null ? null : bcsub($next_tick, hrtime_sec(), 9);
         try {
             $line = getline_timeout($stream, $left, $stream_remote);
             if ($line === EOF) {
                 return;
             } elseif ($line === TIMEOUT) {
-                $next_tick = bcadd($next_tick, $period, 9);
+                $next_tick = null;
                 $period_func();
             } else {
+                if ($next_tick === null) {
+                    $next_tick = bcadd(hrtime_sec(), $period, 9);
+                }
                 $line_func($line);
             }
         } catch (SkipMessage $e) {
@@ -89,13 +97,12 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
     }
     fclose($pipes[0]); // stdin not used
 
-    $datafunc = function($line) use ($stream, &$cursor, &$new_data, $f) {
+    $datafunc = function($line) use ($stream, &$cursor, $f) {
         $json = json_decode($line, true);
         if ($json == NOT_JSON) {
             throw new SkipMessage("Skipping journalctl garbage");
         } else {
             $cursor = $json['__CURSOR'];
-            $new_data = true;
             try {
                 $ts = bcdiv($json['__REALTIME_TIMESTAMP'], 1000000, 3);
                 $output = $f($json, $ts);
@@ -110,15 +117,10 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
             }
         }
     };
-    $cursor_func = function() use ($stream, &$cursor, &$new_data) {
-        // Report cursor only if it has changed
-        if ($new_data) {
-            fputcsv($stream, ['__CURSOR', $cursor]);
-            $new_data = false;
-        }
+    $cursor_func = function() use ($stream, &$cursor) {
+        fputcsv($stream, ['__CURSOR', $cursor]);
     };
 
-    $new_data = false;
     pipe_period($pipes[1], 5, $datafunc, $cursor_func, $stream_remote);
 
     // After EOF, report last cursor and return it to the caller.
