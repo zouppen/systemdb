@@ -36,7 +36,7 @@ function pipe_period($stream, $period, $line_func, $period_func)
             try {
                 $line_func($line);
             } catch (SkipMessage $e) {
-                fprintf(STDERR, $e->errorMessage());
+                $e->warn();
             }
         }
     }
@@ -107,8 +107,8 @@ class SkipMessage extends Exception
         $this->cursor = $cursor;
     }
 
-    public function errorMessage()
+    public function warn()
     {
-        return "Skipping a log message, reason: {$this->getMessage()}. Cursor: {$this->cursor}\n";
+        fprintf(STDERR, "Skipping a log message, reason: %s. Cursor: %s\n", $this->getMessage(), $this->cursor);
     }
 }
