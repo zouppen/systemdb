@@ -166,6 +166,6 @@ class ProcessingException extends Exception
     public function die()
     {
         fprintf(STDERR, "Fatal error: %s\n", $this->getMessage());
-        exit($exit_code);
+        exit($this->exitCode);
     }
 }
