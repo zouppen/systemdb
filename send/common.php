@@ -33,7 +33,11 @@ function pipe_period($stream, $period, $line_func, $period_func)
             $next_tick += $period_ns;
             $period_func();
         } else {
-            $line_func($line);
+            try {
+                $line_func($line);
+            } catch (SkipMessage $e) {
+                fprintf(STDERR, $e->errorMessage());
+            }
         }
     }
 }
@@ -48,16 +52,21 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
     $datafunc = function($line) use ($stream, &$cursor, &$new_data, $f) {
         $json = json_decode($line, true);
         if ($json == NOT_JSON) {
-            fprintf(STDERR, "Skipping journalctl garbage\n");
+            throw new SkipMessage("Skipping journalctl garbage");
         } else {
             $cursor = $json['__CURSOR'];
             $new_data = true;
-            $ts = bcdiv($json['__REALTIME_TIMESTAMP'], 1000000, 3);
-            $output = $f($json, $ts);
-            if (is_array($output)) {
+            try {
+                $ts = bcdiv($json['__REALTIME_TIMESTAMP'], 1000000, 3);
+                $output = $f($json, $ts);
+                if ($output === null) {
+                    throw new SkipMessage("Fallthrough from user function");
+                }
                 fputcsv($stream, $output);
-            } else {
-                fprintf(STDERR, "User function skipped line\n");
+            } catch (SkipMessage $e) {
+                // Add some context
+                $e->setCursor($cursor);
+                throw $e;
             }
         }
     };
@@ -83,4 +92,23 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f)
 function journalctl($stream, $cmdline_extra, $cursor, $f) {
     $second_cursor = journalctl_single($stream, $cmdline_extra, $cursor, $f);
     journalctl_single($stream, '-f '.$cmdline_extra, $second_cursor, $f);
+}
+
+class SkipMessage extends Exception
+{
+    private $cursor;
+
+    public function __construct($message, $code = 0)
+    {
+        parent::__construct($message, $code);
+    }
+
+    public function setCursor($cursor) {
+        $this->cursor = $cursor;
+    }
+
+    public function errorMessage()
+    {
+        return "Skipping a log message, reason: {$this->getMessage()}. Cursor: {$this->cursor}\n";
+    }
 }

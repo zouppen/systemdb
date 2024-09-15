@@ -9,11 +9,10 @@ if ($cursor === false) q("No remote cursor received");
 $cursor=trim($cursor);
 
 $cur = journalctl(STDOUT, '-u victron-ble _TRANSPORT=stdout', $cursor, function($data, $ts) {
-    if ($data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
+    if (@$data['_SYSTEMD_UNIT'] == 'victron-ble.service') {
         $json = json_decode($data['MESSAGE'], true);
         if ($json === null) {
-            fprintf(STDERR, 'Skipping Victron non-JSON data');
-            return;
+            throw new SkipMessage('Victron non-JSON data');
         }
         return ['victron-ble', $ts, $data['MESSAGE']];
     }
