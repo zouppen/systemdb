@@ -18,8 +18,13 @@ set_error_handler(function($severity, $message, $file, $line) {
     }
 });
 
-function getline_timeout($stream, $seconds, $milliseconds)
+function getline_timeout($stream, $timeout)
 {
+    // Split the time 32-bit safe way
+    if (bccomp("0", $timeout, 9) === 1) $timeout = "0";
+    $seconds = intval($timeout);
+    $milliseconds = intval(bcmul(bcsub($timeout, $seconds, 9), "1000000", 9));
+
     $inputs = [$stream];
     $write = [];
     $except = [];
@@ -30,21 +35,21 @@ function getline_timeout($stream, $seconds, $milliseconds)
     }
 }
 
+function hrtimeSec() {
+    return bcdiv(hrtime(true), "1000000000", 9);
+}
+
 function pipe_period($stream, $period, $line_func, $period_func)
 {
-    $period_ns = $period * 1000000000;
-    $next_tick = hrtime(true) + $period_ns;
+    $next_tick = bcadd(hrtimeSec(), $period, 9);
 
     while(true) {
-        $left = intval(max($next_tick - hrtime(true), 0) / 1000);
-        $left_sec = intdiv($left, 1000000);
-        $left_msec = $left - $left_sec * 1000000;
-
-        $line = getline_timeout($stream, $left_sec, $left_msec);
+        $left = bcsub($next_tick, hrtimeSec(), 9);
+        $line = getline_timeout($stream, $left);
         if ($line === EOF) {
             return;
         } elseif ($line === TIMEOUT) {
-            $next_tick += $period_ns;
+            $next_tick = bcadd($next_tick, $period, 9);
             $period_func();
         } else {
             try {
