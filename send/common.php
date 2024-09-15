@@ -98,9 +98,9 @@ class SkipMessage extends Exception
 {
     private $cursor;
 
-    public function __construct($message, $code = 0)
+    public function __construct($message)
     {
-        parent::__construct($message, $code);
+        parent::__construct($message, 0);
     }
 
     public function setCursor($cursor) {
