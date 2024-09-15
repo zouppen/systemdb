@@ -79,7 +79,15 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
     // Convert cursor to cmd
     $after = $cursor === '' ? '' : escapeshellarg('--after-cursor='.$cursor);
 
-    $pipe = popen("exec journalctl -qa --no-tail -o json $after $cmdline_extra", 'r');
+    $res = proc_open("exec journalctl -qa --no-tail -o json $after $cmdline_extra", [
+        ['pipe', 'r'], // stdin
+        ['pipe', 'w'], // stdout
+        STDERR, // dump stdout to console
+    ], $pipes);
+    if ($res == false) {
+        throw new ProcessingException('Unable to start journalctl');
+    }
+    fclose($pipes[0]); // stdin not used
 
     $datafunc = function($line) use ($stream, &$cursor, &$new_data, $f) {
         $json = json_decode($line, true);
@@ -111,10 +119,17 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
     };
 
     $new_data = false;
-    pipe_period($pipe, 5, $datafunc, $cursor_func, $stream_remote);
+    pipe_period($pipes[1], 5, $datafunc, $cursor_func, $stream_remote);
 
     // After EOF, report last cursor and return it to the caller.
     $cursor_func();
+
+    // Make sure it died gracefully
+    $exitcode = proc_close($res);
+    if ($exitcode !== 0) {
+        throw new ProcessingException("journalctl failed (exit code: $exitcode)", 3);
+    }
+
     return $cursor;
 }
 
