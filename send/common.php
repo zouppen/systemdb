@@ -4,6 +4,20 @@ const EOF = false;
 const TIMEOUT = true;
 const NOT_JSON = null;
 
+// Let's have a global notices-to-errors thingy
+set_error_handler(function($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) {
+        // This error code is not included in error_reporting
+        return false;
+    }
+
+    // Check if it's an E_NOTICE
+    if ($severity === E_NOTICE) {
+        // Convert the notice into an ErrorException and throw it
+        throw new ProcessingException($message);
+    }
+});
+
 function getline_timeout($stream, $seconds, $milliseconds)
 {
     $inputs = [$stream];
@@ -110,5 +124,22 @@ class SkipMessage extends Exception
     public function warn()
     {
         fprintf(STDERR, "Skipping a log message, reason: %s. Cursor: %s\n", $this->getMessage(), $this->cursor);
+    }
+}
+
+class ProcessingException extends Exception
+{
+    private $exitCode;
+
+    public function __construct($message, $exitCode=1)
+    {
+        $this->exitCode = $exitCode;
+        parent::__construct($message, 0);
+    }
+
+    public function die()
+    {
+        fprintf(STDERR, "Fatal error: %s\n", $this->getMessage());
+        exit($exit_code);
     }
 }
