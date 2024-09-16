@@ -82,10 +82,33 @@ function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
     }
 }
 
+function journalctl_sanity_check($stream, $expected)
+{
+    // On initial run, don't discard any input
+    if ($expected === '') return;
+
+    // Testing that we can get data
+    $line = fgets($stream);
+    if ($line === false) {
+        throw new ProcessingException('Unable to fetch first journal row');
+    }
+
+    // Test that it's JSON
+    $data = json_decode($line, true);
+    if ($data == NOT_JSON) {
+        throw new ProcessingException('Garbage received from journalctl');
+    }
+
+    // .. and is contiguous (
+    if ($data['__CURSOR'] !== $expected) {
+        throw new ProcessingException('Unexpected cursor: ' . $data['__CURSOR']);
+    }
+}
+
 function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_remote)
 {
     // Convert cursor to cmd
-    $after = $cursor_start === '' ? '' : escapeshellarg('--after-cursor='.$cursor_start);
+    $after = $cursor_start === '' ? '' : escapeshellarg('--cursor='.$cursor_start);
 
     $res = proc_open("exec journalctl -qa --no-tail -o json $after $cmdline_extra", [
         ['pipe', 'r'], // stdin
@@ -96,6 +119,10 @@ function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_r
         throw new ProcessingException('Unable to start journalctl');
     }
     fclose($pipes[0]); // stdin not used
+
+    // Make sure we are getting correct data
+    journalctl_sanity_check($pipes[1], $cursor_start);
+    fprintf(STDERR, "Journal opened in %s mode\n", str_starts_with($cmdline_extra, '-f ') ? 'follow': 'oneshot');
 
     $datafunc = function($line) use ($stream, &$cursor, $f) {
         $json = json_decode($line, true);
