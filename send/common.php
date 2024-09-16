@@ -137,7 +137,10 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, 
 
     // Make sure we are getting correct data
     journalctl_sanity_check($pipes[1], $cursor_start);
-    fprintf(STDERR, "Journal opened in %s mode\n", $follow ? 'follow': 'oneshot');
+    fwrite(STDERR, $follow ?
+           "Backfill done, syncing real-time\n" :
+           "Journal backfill started\n"
+    );
 
     $datafunc = function($line) use ($stream, &$cursor, $f) {
         $json = json_decode($line, true);
