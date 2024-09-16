@@ -118,7 +118,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
         }
     };
     $cursor_func = function() use ($stream, &$cursor) {
-        fputcsv($stream, ['__CURSOR', $cursor]);
+        fputcsv($stream, ['_', $cursor]);
     };
 
     pipe_period($pipes[1], 5, $datafunc, $cursor_func, $stream_remote);
