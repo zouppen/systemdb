@@ -24,4 +24,3 @@ journalctl_catch($cmd, 'journal', '-u victron-ble _TRANSPORT=stdout', function($
         return ['victron', $ts, json_encode($msg)];
     }
 });
-
