@@ -82,10 +82,10 @@ function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
     }
 }
 
-function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
+function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_remote)
 {
     // Convert cursor to cmd
-    $after = $cursor === '' ? '' : escapeshellarg('--after-cursor='.$cursor);
+    $after = $cursor_start === '' ? '' : escapeshellarg('--after-cursor='.$cursor_start);
 
     $res = proc_open("exec journalctl -qa --no-tail -o json $after $cmdline_extra", [
         ['pipe', 'r'], // stdin
@@ -118,6 +118,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor, $f, $stream_remote)
         }
     };
     $cursor_func = function() use ($stream, &$cursor) {
+        if ($cursor === null) return; // Skip if we haven't got anything yet
         fputcsv($stream, ['_', $cursor]);
     };
 
