@@ -133,7 +133,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_r
         throw new ProcessingException("journalctl failed (exit code: $exitcode)", 3);
     }
 
-    return $cursor;
+    return $cursor ?? $cursor_start;
 }
 
 // Version of journalctl which dies with a more compact message if
