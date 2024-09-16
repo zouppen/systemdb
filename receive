@@ -13,11 +13,14 @@ if ($argc !== 2) {
 
 $ini = parse_ini_file($argv[1], true);
 
+// Site is a namespace you can use, default is empty string.
+$site = $ini['site'] ?? '';
+
 // Connect and prepare statements
 $db = pg_connect($ini['db']);
-pg_prepare($db, 'cursor_create', 'INSERT INTO cursor VALUES ($1) ON CONFLICT DO NOTHING');
-pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE source=$1');
-pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$2 where source=$1');
+pg_prepare($db, 'cursor_create', 'INSERT INTO cursor (site, cursor) VALUES ($1, $2) ON CONFLICT DO NOTHING');
+pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE site=$1 AND source=$2');
+pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$3 WHERE site=$1 AND source=$2');
 
 // Check if the source is allowed in the config file
 $source = trim(fgets(STDIN));
@@ -32,10 +35,10 @@ foreach ($ini[$source] as $tag => $sql) {
 }
 
 // Create cursor if not exists
-pg_execute($db, 'cursor_create', [$source]);
+pg_execute($db, 'cursor_create', [$site, $source]);
 
 // Return the pointer to the remote application
-$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$source]), 0, 0);
+$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$site, $source]), 0, 0);
 print("$cursor_start\n");
 
 // Start receiving lines
@@ -52,7 +55,7 @@ while (true) {
         // If the data tag is __CURSOR or _, then we have fully received the
         // rows related to a single cursor and it's time to commit.
         $cursor = array_shift($line);
-        pg_execute($db, 'cursor_set', [$source, $cursor]);
+        pg_execute($db, 'cursor_set', [$site, $source, $cursor]);
         pg_query($db, 'COMMIT;BEGIN;');
     } else {
         // Insert CSV to a table but do not commit yet
