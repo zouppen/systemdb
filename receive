@@ -18,7 +18,7 @@ $site = $ini['site'] ?? '';
 
 // Connect and prepare statements
 $db = pg_connect($ini['db']);
-pg_prepare($db, 'cursor_create', 'INSERT INTO cursor (site, cursor) VALUES ($1, $2) ON CONFLICT DO NOTHING');
+pg_prepare($db, 'cursor_create', 'INSERT INTO cursor (site, source) VALUES ($1, $2) ON CONFLICT DO NOTHING');
 pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE site=$1 AND source=$2');
 pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$3 WHERE site=$1 AND source=$2');
 
