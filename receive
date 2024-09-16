@@ -48,8 +48,8 @@ while (true) {
 
     $tag = array_shift($line);
 
-    if ($tag === '__CURSOR') {
-        // If the data tag is __CURSOR, then we have fully received the
+    if ($tag === '__CURSOR' || $tag === '_') {
+        // If the data tag is __CURSOR or _, then we have fully received the
         // rows related to a single cursor and it's time to commit.
         $cursor = array_shift($line);
         pg_execute($db, 'cursor_set', [$source, $cursor]);
