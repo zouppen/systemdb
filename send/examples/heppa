@@ -1,0 +1,19 @@
+#!/usr/bin/env php
+<?php
+
+require(__DIR__."/../common.php");
+
+// Just pass the data to the local receiver
+$cmd = 'exec '.__DIR__.'/../../receive '.__DIR__.'/../../oma.ini';
+
+journalctl_catch($cmd, 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
+    switch (@$data['_SYSTEMD_UNIT']) {
+    case 'victron-ble.service':
+        $json = json_decode($data['MESSAGE'], true);
+        if ($json === null) {
+            throw new SkipMessage('Victron non-JSON data');
+        }
+        return ['victron', $ts, $data['MESSAGE']];
+    }
+});
+
