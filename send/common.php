@@ -4,6 +4,8 @@ const EOF = false;
 const TIMEOUT = true;
 const NOT_JSON = null;
 
+error_reporting(E_ALL | E_STRICT);
+
 // Let's have a global notices-to-errors thingy
 set_error_handler(function($severity, $message, $file, $line) {
     if (!(error_reporting() & $severity)) {
@@ -13,9 +15,12 @@ set_error_handler(function($severity, $message, $file, $line) {
 
     // Check if it's an E_NOTICE
     if ($severity === E_NOTICE) {
-        // Convert the notice into an ErrorException and throw it
+        // Convert the notice to an exception and throw it
         throw new ProcessingException($message);
     }
+
+    // Dump the rest as errors with stack trace (not catching them)
+    throw new ErrorException($message, 0, $severity, $file, $line);
 });
 
 function getline_timeout($stream, $timeout, $stream_remote)
@@ -23,15 +28,20 @@ function getline_timeout($stream, $timeout, $stream_remote)
     // Split the time 32-bit safe way
     if ($timeout === null) {
         // Blocking read with no timeout
+        $sec = null;
+        $ms = null;
+        $skip_read = false;
     } else if (bccomp("0", $timeout, 9) === 1) {
         // Timeout imminent. Don't even try to get new data, just
         // non-blockingly check if the remote pipe is still fine.
         $sec = 0;
+        $ms = 0;
         $skip_read = true;
     } else {
         // Blocking read with timeout
         $sec = intval($timeout);
         $ms = intval(bcmul(bcsub($timeout, $sec, 9), "1000000", 9));
+        $skip_read = false;
     }
 
     $inputs = $skip_read ? [$stream_remote] : [$stream, $stream_remote];
@@ -61,6 +71,8 @@ function hrtime_sec() {
 
 function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
 {
+    $next_tick = null;
+
     while(true) {
         $left = $next_tick === null ? null : bcsub($next_tick, hrtime_sec(), 9);
         try {
