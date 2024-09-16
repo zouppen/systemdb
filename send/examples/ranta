@@ -6,11 +6,17 @@ require(__DIR__."/../common.php");
 journalctl_catch('exec ssh -CT grafana', 'journal', '-u victron-ble _TRANSPORT=stdout', function($data, $ts) {
     switch (@$data['_SYSTEMD_UNIT']) {
     case 'victron-ble.service':
-        $json = json_decode($data['MESSAGE'], true);
-        if ($json === null) {
+        // victron-ble outputs its data line-by-line as JSON
+        $msg = json_decode($data['MESSAGE'], true);
+        if ($msg === null) {
             throw new SkipMessage('Victron non-JSON data');
         }
-        return ['victron-ble', $ts, $data['MESSAGE']];
+
+        // Strip constant data
+        unset($msg['address']);
+        unset($msg['payload']['model_name']);
+
+        // Store
+        return ['victron', $ts, json_encode($msg)];
     }
 });
-
