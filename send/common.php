@@ -24,15 +24,17 @@ function getline_timeout($stream, $timeout, $stream_remote)
     if ($timeout === null) {
         // Blocking read with no timeout
     } else if (bccomp("0", $timeout, 9) === 1) {
-        // Non-blocking read
+        // Timeout imminent. Don't even try to get new data, just
+        // non-blockingly check if the remote pipe is still fine.
         $sec = 0;
+        $skip_read = true;
     } else {
         // Blocking read with timeout
         $sec = intval($timeout);
         $ms = intval(bcmul(bcsub($timeout, $sec, 9), "1000000", 9));
     }
 
-    $inputs = [$stream, $stream_remote];
+    $inputs = $skip_read ? [$stream_remote] : [$stream, $stream_remote];
     $write = [];
     $except = [];
     if (stream_select($inputs, $write, $except, $sec, $ms)) {
