@@ -119,12 +119,13 @@ function journalctl_sanity_check($stream, $expected)
     }
 }
 
-function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_remote)
+function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, $stream_remote)
 {
     // Convert cursor to cmd
     $after = $cursor_start === '' ? '' : escapeshellarg('--cursor='.$cursor_start);
+    $follow_arg = $follow ? '-f' : '';
 
-    $res = proc_open("exec journalctl -qa --no-tail -o json $after $cmdline_extra", [
+    $res = proc_open("exec journalctl -qa --no-tail -o json $after $follow_arg $cmdline_extra", [
         ['pipe', 'r'], // stdin
         ['pipe', 'w'], // stdout
         STDERR, // dump stdout to console
@@ -136,7 +137,7 @@ function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_r
 
     // Make sure we are getting correct data
     journalctl_sanity_check($pipes[1], $cursor_start);
-    fprintf(STDERR, "Journal opened in %s mode\n", str_starts_with($cmdline_extra, '-f ') ? 'follow': 'oneshot');
+    fprintf(STDERR, "Journal opened in %s mode\n", $follow ? 'follow': 'oneshot');
 
     $datafunc = function($line) use ($stream, &$cursor, $f) {
         $json = json_decode($line, true);
@@ -163,7 +164,9 @@ function journalctl_single($stream, $cmdline_extra, $cursor_start, $f, $stream_r
         fputcsv($stream, ['_', $cursor]);
     };
 
-    pipe_period($pipes[1], 5, $datafunc, $cursor_func, $stream_remote);
+    // When back-filling data, the commit interval may be way longer.
+    $timeout = $follow ? 3 : 20;
+    pipe_period($pipes[1], $timeout, $datafunc, $cursor_func, $stream_remote);
 
     // After EOF, report last cursor and return it to the caller.
     $cursor_func();
@@ -213,8 +216,8 @@ function journalctl($command, $hello, $cmdline_extra, $f)
     // Run journal reader twice, first without follow and then with
     // follow on. Helps to mitigate certain journald issues when
     // following to months-old log files.
-    $cursor = journalctl_single($pipes[0], $cmdline_extra, $cursor, $f, $pipes[1]);
-    journalctl_single($pipes[0], '-f '.$cmdline_extra, $cursor, $f, $pipes[1]);
+    $cursor = journalctl_single($pipes[0], false, $cmdline_extra, $cursor, $f, $pipes[1]);
+    journalctl_single($pipes[0], true, $cmdline_extra, $cursor, $f, $pipes[1]);
 }
 
 class SkipMessage extends Exception
