@@ -66,7 +66,8 @@ function getline_timeout($stream, $timeout, $stream_remote)
 }
 
 function hrtime_sec() {
-    return bcdiv(hrtime(true), "1000000000", 9);
+    [$s, $ns] = hrtime();
+    return bcadd($s, bcdiv($ns, "1000000000", 9), 9);
 }
 
 function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
