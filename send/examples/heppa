@@ -10,6 +10,9 @@ journalctl_catch($cmd, 'journal', '-u victron-ble _TRANSPORT=stdout', function($
     switch (@$data['_SYSTEMD_UNIT']) {
     case 'victron-ble.service':
         // victron-ble outputs its data line-by-line as JSON
+        if (!array_key_exists('MESSAGE', $data)) {
+            throw new SkipMessage('Entry does not contain a message');
+        }
         $msg = json_decode($data['MESSAGE'], true);
         if ($msg === null) {
             throw new SkipMessage('Victron non-JSON data');
@@ -22,5 +25,8 @@ journalctl_catch($cmd, 'journal', '-u victron-ble _TRANSPORT=stdout', function($
 
         // Store
         return ['victron', $ts, json_encode($msg)];
+        break;
+    default:
+        throw new SkipMessage('No handler for this unit');
     }
 });
