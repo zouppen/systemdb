@@ -143,12 +143,13 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, 
            "Journal backfill started\n"
     );
 
-    $datafunc = function($line) use ($stream, &$cursor, $f) {
+    $datafunc = function($line) use ($stream, &$cursor, &$cursor_ts, $f) {
         $json = json_decode($line, true);
         if ($json == NOT_JSON) {
             throw new SkipMessage("Skipping journalctl garbage");
         } else {
             $cursor = $json['__CURSOR'];
+            $cursor_ts = $json['__REALTIME_TIMESTAMP'];
             try {
                 $ts = bcdiv($json['__REALTIME_TIMESTAMP'], 1000000, 3);
                 $output = $f($json, $ts);
@@ -163,9 +164,9 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, 
             }
         }
     };
-    $cursor_func = function() use ($stream, &$cursor) {
+    $cursor_func = function() use ($stream, &$cursor, &$cursor_ts) {
         if ($cursor === null) return; // Skip if we haven't got anything yet
-        fputcsv($stream, ['_', $cursor]);
+        fputcsv($stream, ['_', $cursor, $cursor_ts]);
     };
 
     // When back-filling data, the commit interval may be way longer.
