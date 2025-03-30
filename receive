@@ -19,7 +19,7 @@ $site = $ini['site'] ?? '';
 // Connect and prepare statements
 $db = pg_connect($ini['db']);
 pg_prepare($db, 'cursor_create', 'INSERT INTO cursor (site, source) VALUES ($1, $2) ON CONFLICT DO NOTHING');
-pg_prepare($db, 'cursor_start', 'SELECT cursor FROM cursor WHERE site=$1 AND source=$2');
+pg_prepare($db, 'cursor_start', 'SELECT cursor, ts FROM cursor WHERE site=$1 AND source=$2');
 pg_prepare($db, 'cursor_set', 'UPDATE cursor SET cursor=$3, ts=($4::BIGINT) WHERE site=$1 AND source=$2');
 
 // Check if the source is allowed in the config file
@@ -38,8 +38,10 @@ foreach ($ini[$source] as $tag => $sql) {
 pg_execute($db, 'cursor_create', [$site, $source]);
 
 // Return the pointer to the remote application
-$cursor_start = pg_fetch_result(pg_execute($db, 'cursor_start', [$site, $source]), 0, 0);
-print("$cursor_start\n");
+$cursor_result = pg_execute($db, 'cursor_start', [$site, $source]);
+$cursor_start = pg_fetch_result($cursor_result, 0, 0);
+$cursor_ts = pg_fetch_result($cursor_result, 0, 1);
+print("$cursor_start\n$cursor_ts\n");
 
 // Start receiving lines
 pg_query($db, 'BEGIN;');
