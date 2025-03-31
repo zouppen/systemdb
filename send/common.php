@@ -6,6 +6,9 @@ const NOT_JSON = null;
 
 error_reporting(E_ALL | E_STRICT);
 
+// 1 hour travel to the past is allowed (fake-hwclock update interval)
+$allowed_time_travel = "-3600";
+
 // Let's have a global notices-to-errors thingy
 set_error_handler(function($severity, $message, $file, $line) {
     if (!(error_reporting() & $severity)) {
@@ -97,8 +100,10 @@ function pipe_period($stream, $period, $line_func, $period_func, $stream_remote)
     }
 }
 
-function journalctl_sanity_check($stream, $expected)
+function journalctl_sanity_check($stream, $expected, $ts)
 {
+    global $allowed_time_travel;
+
     // On initial run, don't discard any input
     if ($expected === '') return;
 
@@ -114,13 +119,19 @@ function journalctl_sanity_check($stream, $expected)
         throw new ProcessingException('Garbage received from journalctl');
     }
 
-    // .. and is contiguous (
+    // .. and is contiguous
     if ($data['__CURSOR'] !== $expected) {
-        throw new ProcessingException('Unexpected cursor: ' . $data['__CURSOR']);
+        $clock_diff = bcdiv(bcsub($data['__REALTIME_TIMESTAMP'], $ts, 0), 1000000, 3);
+
+        if (bccomp($clock_diff, $allowed_time_travel, 3) === 1) {
+            fprintf(STDERR, "Some rows are lost after cursor %s. Time difference is %s seconds. Skipping.\n", $expected, $clock_diff);
+        } else {
+            throw new ProcessingException('Unexpected cursor: ' . $data['__CURSOR']);
+        }
     }
 }
 
-function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, $stream_remote)
+function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $cursor_start_ts, $f, $stream_remote)
 {
     // Convert cursor to cmd
     $after = $cursor_start === '' ? '' : escapeshellarg('--cursor='.$cursor_start);
@@ -137,7 +148,7 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $f, 
     fclose($pipes[0]); // stdin not used
 
     // Make sure we are getting correct data
-    journalctl_sanity_check($pipes[1], $cursor_start);
+    journalctl_sanity_check($pipes[1], $cursor_start, $cursor_start_ts);
     fwrite(STDERR, $follow ?
            "Backfill done, syncing real-time\n" :
            "Journal backfill started\n"
@@ -216,13 +227,20 @@ function journalctl($command, $hello, $cmdline_extra, $f)
         throw new ProcessingException('No remote cursor received');
     }
     $cursor = trim($cursor);
+
+    $cursor_ts = fgets($pipes[1]);
+    if ($cursor_ts === false) {
+        throw new ProcessingException('No remote timestamp received');
+    }
+    $cursor_ts = trim($cursor_ts);
+
     fprintf(STDERR, "Connected\n");
 
     // Run journal reader twice, first without follow and then with
     // follow on. Helps to mitigate certain journald issues when
     // following to months-old log files.
-    $cursor = journalctl_single($pipes[0], false, $cmdline_extra, $cursor, $f, $pipes[1]);
-    journalctl_single($pipes[0], true, $cmdline_extra, $cursor, $f, $pipes[1]);
+    $cursor = journalctl_single($pipes[0], false, $cmdline_extra, $cursor, $cursor_ts, $f, $pipes[1]);
+    journalctl_single($pipes[0], true, $cmdline_extra, $cursor, $cursor_ts, $f, $pipes[1]);
 }
 
 class SkipMessage extends Exception
