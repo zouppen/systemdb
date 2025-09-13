@@ -48,7 +48,7 @@ pg_query($db, 'BEGIN;');
 
 while (true) {
     // Get CSV data or quit if EOF reached
-    $line = fgetcsv(STDIN);
+    $line = fgetcsv(STDIN, escape: "");
     if ($line === FALSE) break;
 
     $tag = array_shift($line);

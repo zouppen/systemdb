@@ -167,7 +167,7 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $cur
                 if ($output === null) {
                     throw new SkipMessage("Fallthrough from user function");
                 }
-                fputcsv($stream, $output);
+                fputcsv($stream, $output, escape: "");
             } catch (SkipMessage $e) {
                 // Add some context
                 $e->setCursor($cursor);
@@ -177,7 +177,7 @@ function journalctl_single($stream, $follow, $cmdline_extra, $cursor_start, $cur
     };
     $cursor_func = function() use ($stream, &$cursor, &$cursor_ts) {
         if ($cursor === null) return; // Skip if we haven't got anything yet
-        fputcsv($stream, ['_', $cursor, $cursor_ts]);
+        fputcsv($stream, ['_', $cursor, $cursor_ts], escape: "");
     };
 
     // When back-filling data, the commit interval may be way longer.
